@@ -1,18 +1,46 @@
-name: Trigger Playwright Tests
+name: Trigger and Wait for Playwright Tests
 
 on:
   push:
     branches:
-      - main  # main 브랜치에 push가 발생할 때
+      - main
+
+  workflow_dispatch:
 
 jobs:
   trigger-playwright-tests:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
       - name: Send webhook to Playwright repository
+        id: trigger
         run: |
           curl -X POST https://api.github.com/repos/sseung95/playwright-test/dispatches \
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
             -d '{"event_type":"run-tests"}'
+
+  wait-for-playwright-tests:
+    runs-on: ubuntu-latest
+    needs: trigger-playwright-tests
+
+    steps:
+      - name: Wait for Playwright tests completion
+        run: |
+          echo "Waiting for Playwright tests to complete..."
+
+      - name: Check Playwright tests status
+        run: |
+          curl -H "Accept: application/vnd.github.v3+json" \
+               -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+               https://api.github.com/repos/sseung95/playwright-trigger-test/dispatches | jq -r '.client_payload.status' > status.txt
+          status=$(cat status.txt)
+          if [ "$status" == "success" ]; then
+            echo "Playwright tests passed"
+          else
+            echo "Playwright tests failed"
+            exit 1
+          fi
